@@ -1,5 +1,6 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
+import { SignalrService } from '../../service/signalr.service';
 
 @Component({
   selector: 'app-interview',
@@ -20,35 +21,52 @@ export class InterviewComponent {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
   };
 
+  constructor(private signalrService: SignalrService){}
+
   ngOnInit() {
-    this.initSignalR();
+    this.signalrService.connect().then(() => {
+      console.log('SignalR connected');
+
+      this.signalrService.onOffer(async (offer) => {
+        await this.createAnswer(offer);
+      });
+
+      this.signalrService.onAnswer(async (answer) => {
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+      });
+
+      this.signalrService.onIceCandidate(async (candidate) => {
+        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      });
+    });
   }
 
-  async initSignalR() {
-    this.connection = new signalR.HubConnectionBuilder()
-      .withUrl('https://your-api-url/interviewHub')
-      .withAutomaticReconnect()
-      .build();
+  // async initSignalR() {
+  //   this.connection = new signalR.HubConnectionBuilder()
+  //     .withUrl('wss://localhost:7037/video-hub')
+  //     .withAutomaticReconnect()
+  //     .build();
 
-    this.connection.on('Receive Offer', async (offer) => {
-      await this.createAnswer(offer);
-    });
+  //   this.connection.on('Receive Offer', async (offer) => {
+  //     await this.createAnswer(offer);
+  //   });
 
-    this.connection.on('ReceiveAnswer', async (answer) => {
-      await this.peerConnection.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
-    });
+  //   this.connection.on('ReceiveAnswer', async (answer) => {
+  //     await this.peerConnection.setRemoteDescription(
+  //       new RTCSessionDescription(answer)
+  //     );
+  //   });
 
-    this.connection.on('ReceiveIceCandidate', async (candidate) => {
-      await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-    });
+  //   this.connection.on('ReceiveIceCandidate', async (candidate) => {
+  //     await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+  //   });
 
-    await this.connection.start();
-    console.log('SignalR Connected');
-  }
+  //   await this.connection.start();
+  //   console.log('SignalR Connected');
+  // }
 
   async startCall() {
+    // debugger;
     this.localStream = await navigator.mediaDevices.getUserMedia({
       video: true,
       audio: true,
@@ -75,14 +93,14 @@ export class InterviewComponent {
     // Handle ICE candidates
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        this.connection.invoke('SendIceCandidate', event.candidate);
+        this.signalrService.sendIceCandidate(event.candidate);
       }
     };
 
     // Create Offer
     const offer = await this.peerConnection.createOffer();
     await this.peerConnection.setLocalDescription(offer);
-    await this.connection.invoke('SendOffer', offer);
+    this.signalrService.sendOffer(offer);
   }
 
   async createAnswer(offer: RTCSessionDescriptionInit) {
@@ -105,7 +123,7 @@ export class InterviewComponent {
 
     this.peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
-        this.connection.invoke('SendIceCandidate', event.candidate);
+        this.signalrService.sendIceCandidate(event.candidate);
       }
     };
 
@@ -115,7 +133,7 @@ export class InterviewComponent {
 
     const answer = await this.peerConnection.createAnswer();
     await this.peerConnection.setLocalDescription(answer);
-    await this.connection.invoke('SendAnswer', answer);
+    this.signalrService.sendAnswer(answer);
   }
 
   hangUp() {
