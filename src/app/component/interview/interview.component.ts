@@ -35,8 +35,8 @@ export class InterviewComponent {
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
       });
 
-      this.signalrService.onIceCandidate(async (candidate) => {
-        await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+      this.signalrService.onIceCandidate(async (candidate: any) => {
+        await this.peerConnection.addIceCandidate(candidate);
       });
     });
   }
@@ -114,6 +114,9 @@ export class InterviewComponent {
     this.localStream.getTracks().forEach((track) => {
       this.peerConnection.addTrack(track, this.localStream);
     });
+
+    this.remoteStream = new MediaStream();
+    this.remoteVideo.nativeElement.srcObject = this.remoteStream;
 
     this.peerConnection.ontrack = (event) => {
       event.streams[0].getTracks().forEach((track) => {
